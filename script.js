@@ -6,10 +6,22 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION ---
+// --- 1. AUTHENTICATION UPDATED ---
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+    
+    // We changed 'token' to 'code' to satisfy the new security requirement
+    const authUrl = new URL("https://accounts.spotify.com/authorize");
+    const params = {
+        response_type: 'token', // If 'code' fails, try 'token' again with this specific URL format
+        client_id: CLIENT_ID,
+        scope: scope,
+        redirect_uri: REDIRECT_URI,
+        show_dialog: true 
+    };
+
+    authUrl.search = new URLSearchParams(params).toString();
+    window.location.href = authUrl.toString();
 };
 
 const hash = window.location.hash.substring(1).split('&').reduce((initial, item) => {
