@@ -15,10 +15,6 @@ let library = [];
 const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');
 
-if (code) {
-    exchangeCodeForToken(code);
-}
-
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
     
@@ -175,3 +171,7 @@ document.getElementById('main-action-btn').onclick = () => {
 document.querySelectorAll('.btn-srs').forEach(btn => {
     btn.onclick = () => handleSrs(parseInt(btn.dataset.grade));
 });
+
+if (code) {
+    exchangeCodeForToken(code);
+}
