@@ -6,14 +6,15 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION UPDATED ---
+// --- 1. AUTHENTICATION (REAL LIVE URL) ---
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
     
-    // We changed 'token' to 'code' to satisfy the new security requirement
+    // This is the actual Spotify Authorization endpoint
     const authUrl = new URL("https://accounts.spotify.com/authorize");
+    
     const params = {
-        response_type: 'token', // If 'code' fails, try 'token' again with this specific URL format
+        response_type: 'token', 
         client_id: CLIENT_ID,
         scope: scope,
         redirect_uri: REDIRECT_URI,
