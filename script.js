@@ -165,7 +165,6 @@ window.onSpotifyWebPlaybackSDKReady = () => {
     player.connect();
 };
 
-JavaScript
 function updateAnkiDisplay() {
     const now = Date.now();
     let counts = { new: 0, learning: 0, due: 0 };
@@ -189,4 +188,23 @@ function updateAnkiDisplay() {
     document.getElementById('count-new').innerText = counts.new;
     document.getElementById('count-learning').innerText = counts.learning;
     document.getElementById('count-due').innerText = counts.due;
+}
+
+async function rateSong(grade) {
+    // ... (Your math for calculating the new next_review) ...
+
+    // Save to local storage so you don't lose progress if the phone dies
+    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
+    progress[currentSong.uri] = {
+        next_review: currentSong.next_review,
+        interval: currentSong.interval,
+        ease: currentSong.ease
+    };
+    localStorage.setItem('trivia_progress', JSON.stringify(progress));
+
+    // --- REFRESH THE NUMBERS ---
+    updateAnkiDisplay(); 
+
+    // Go back to the start screen for the next song
+    showStartScreen(); 
 }
