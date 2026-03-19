@@ -50,8 +50,10 @@ async function loadLibrary() {
             ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
         }));
 
+        // Populate Year Filter
         const years = [...new Set(library.map(s => s.year))].sort();
         const select = document.getElementById('year-filter');
+        select.innerHTML = '<option value="ALL">All Years (Due for Review)</option>';
         years.forEach(y => {
             const opt = document.createElement('option');
             opt.value = y; opt.innerText = y;
@@ -85,45 +87,61 @@ function getNextSong() {
     const filter = document.getElementById('year-filter').value;
     const now = Date.now();
     
-    // Prioritize Due songs first, then New songs
     let pool = library.filter(s => (filter === 'ALL' || s.year == filter));
-    let duePool = pool.filter(s => s.next_review <= now);
+    let duePool = pool.filter(s => s.next_review <= now || !s.next_review);
     
     if (duePool.length > 0) return duePool[Math.floor(Math.random() * duePool.length)];
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
 async function playSong() {
+    if (!deviceId) {
+        alert("Spotify Player not ready yet. Please wait a second.");
+        return;
+    }
+
     currentSong = getNextSong();
     if (!currentSong) return;
 
-    // Reset UI for new song
+    // UI Updates
     document.getElementById('reveal-area').classList.add('hidden');
     document.getElementById('srs-controls').classList.add('hidden');
     document.getElementById('visualizer').classList.remove('hidden');
     document.getElementById('playing-status').innerText = "Playing...";
+    document.getElementById('main-action-btn').innerText = 'REVEAL';
 
+    // FIX: Corrected URL and Template Literal
     const url = `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`;
 
-    await fetch(url, {
-        method: 'PUT',
-        body: JSON.stringify({ 
-            uris: [currentSong.uri],
-            position_ms: currentSong.start_ms || 0 
-        }),
-        headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${accessToken}` 
-        }
-    });
+    try {
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: JSON.stringify({ 
+                uris: [currentSong.uri],
+                position_ms: currentSong.start_ms || 0 
+            }),
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${accessToken}` 
+            }
+        });
 
-    document.getElementById('main-action-btn').innerText = 'REVEAL';
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Spotify Playback Error:", errorData);
+            if (errorData.error.reason === "PREMIUM_REQUIRED") {
+                alert("Spotify Premium is required for this app.");
+            }
+        }
+    } catch (err) {
+        console.error("Playback Fetch Error:", err);
+    }
 }
 
 function reveal() {
     document.getElementById('song-title').innerText = currentSong.title;
     document.getElementById('song-artist').innerText = currentSong.artist;
-    document.getElementById('song-year').innerText = currentSong.year;
+    document.getElementById('song-year').innerText = `Year: ${currentSong.year}`;
     
     document.getElementById('reveal-area').classList.remove('hidden');
     document.getElementById('visualizer').classList.add('hidden');
@@ -136,22 +154,20 @@ function handleSrs(grade) {
     const now = Date.now();
     const dayInMs = 24 * 60 * 60 * 1000;
 
-    // SRS Logic (Simplified SM-2)
+    // Spaced Repetition Logic
     if (gradeNum >= 3) {
-        // Pass: GOOD (3) or EASY (4)
         currentSong.interval = (currentSong.interval === 0) ? 1 : currentSong.interval * (gradeNum === 4 ? 4 : 2);
         currentSong.next_review = now + (currentSong.interval * dayInMs);
     } else {
-        // Fail: AGAIN (1) or HARD (2)
         currentSong.interval = 0;
-        currentSong.next_review = now + (10 * 60 * 1000); // 10 minutes
+        currentSong.next_review = now + (10 * 60 * 1000); 
     }
 
-    // Save to library
+    // Update Local Library
     const index = library.findIndex(s => s.uri === currentSong.uri);
     if (index !== -1) library[index] = { ...currentSong };
 
-    // Persistent storage
+    // Save Progress
     const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
     progress[currentSong.uri] = {
         next_review: currentSong.next_review,
@@ -165,14 +181,16 @@ function handleSrs(grade) {
     document.getElementById('srs-controls').classList.add('hidden');
     document.getElementById('main-action-btn').classList.remove('hidden');
     document.getElementById('main-action-btn').innerText = 'PLAY';
+    
     if (player) player.pause();
 }
 
-// --- EVENT LISTENERS ---
+// --- INITIALIZATION & EVENTS ---
 
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+    window.location.href = authUrl;
 };
 
 document.getElementById('main-action-btn').onclick = () => {
@@ -185,20 +203,21 @@ document.querySelectorAll('.btn-srs').forEach(btn => {
     btn.onclick = () => handleSrs(btn.dataset.grade);
 });
 
-// SDK Setup
 window.onSpotifyWebPlaybackSDKReady = () => {
     player = new Spotify.Player({
-        name: 'Music Trivia',
-        getOAuthToken: cb => { cb(accessToken); }
+        name: 'Trivia SRS Player',
+        getOAuthToken: cb => { cb(accessToken); },
+        volume: 0.8
     });
 
     player.addListener('ready', ({ device_id }) => {
         deviceId = device_id;
-        console.log('Ready with Device ID', device_id);
+        console.log('Spotify Player Ready');
     });
 
     player.connect();
 };
 
-const code = new URLSearchParams(window.location.search).get('code');
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
 if (code) exchangeCodeForToken(code);
