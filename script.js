@@ -60,13 +60,43 @@ async function loadLibrary() {
 }
 
 async function playSong() {
-    currentSong = getNextSong();
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ uris: [currentSong.uri], position_ms: currentSong.start_ms }),
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` }
-    });
-    document.getElementById('main-action-btn').innerText = 'REVEAL';
+    if (!currentSong) {
+        currentSong = getNextSong();
+    }
+    
+    // We try to use the deviceId if the Web Player is ready, 
+    // otherwise, we send it to 'play' on your most recent active device.
+    const url = deviceId 
+        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}` 
+        : `https://accounts.spotify.com/authorize1`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: JSON.stringify({ 
+                uris: [currentSong.uri], 
+                position_ms: currentSong.start_ms 
+            }),
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${accessToken}` 
+            }
+        });
+
+        if (response.ok) {
+            document.getElementById('main-action-btn').innerText = 'REVEAL';
+            document.getElementById('playing-status').innerText = 'Playing...';
+        } else {
+            const errorData = await response.json();
+            console.error("Playback Error:", errorData);
+            // If it's a 404, it means no active device was found
+            if (response.status === 404) {
+                alert("No active Spotify device found. Open the Spotify app and play a song first!");
+            }
+        }
+    } catch (err) {
+        console.error("Fetch error:", err);
+    }
 }
 
 function getNextSong() {
