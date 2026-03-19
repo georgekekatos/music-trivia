@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4 bg-zinc-900 text-white">
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
     <div id="auth-section" class="text-center">
         <h1 class="text-3xl font-bold mb-8 text-green-500">Trivia SRS</h1>
         <button id="login-btn" class="bg-green-600 px-8 py-4 rounded-full font-bold text-xl">Login to Spotify</button>
@@ -16,26 +16,13 @@
 
     <div id="player-section" class="hidden w-full max-w-md text-center">
         <div class="mb-4">
-            <select id="year-filter" class="bg-gray-800 text-white p-2 rounded w-full border border-gray-700">
+            <select id="year-filter" class="bg-gray-800 text-white p-2 rounded w-full">
                 <option value="ALL">All Years (Due for Review)</option>
             </select>
         </div>
 
-        <div id="audio-visual" class="mb-8 border-2 border-gray-800 rounded-xl bg-black/20 flex flex-row items-center justify-center gap-4 h-24">
-    <div id="playing-status" class="text-gray-400 font-bold uppercase tracking-widest text-sm">Ready</div>
-    <div id="visualizer" class="visualizer hidden">
-        <div class="bar"></div>
-        <div class="bar"></div>
-        <div class="bar"></div>
-        <div class="bar"></div>
-        <div class="bar"></div>
-    </div>
-</div>
-
-        <div id="status-container" class="mb-6 font-bold text-lg">
-            <span class="stat-new" id="count-new">0</span> + 
-            <span class="stat-learning" id="count-learning">0</span> + 
-            <span class="stat-due" id="count-due">0</span>
+        <div id="audio-visual" class="h-48 flex items-center justify-center mb-8 border-2 border-dashed border-gray-700 rounded-xl">
+            <div id="playing-status" class="text-gray-400">Ready to Play</div>
         </div>
 
         <div id="reveal-area" class="hidden mb-8">
@@ -43,19 +30,36 @@
             <p id="song-artist" class="text-xl text-gray-300"></p>
             <p id="song-year" class="text-lg text-gray-500"></p>
         </div>
+
+        <div id="status-container">
+    <span class="stat-new" id="count-new">0</span> + 
+    <span class="stat-learning" id="count-learning">0</span> + 
+    <span class="stat-due" id="count-due">0</span>
+</div>
         
         <div class="grid grid-cols-1 gap-4">
             <button id="main-action-btn" class="bg-blue-600 py-6 rounded-2xl text-2xl font-bold shadow-lg">PLAY</button>
             
             <div id="srs-controls" class="hidden grid grid-cols-4 gap-2">
-                <button onclick="handleSrs(1)" class="bg-red-900 p-4 rounded-lg text-xs font-bold">AGAIN</button>
-                <button onclick="handleSrs(2)" class="bg-orange-700 p-4 rounded-lg text-xs font-bold">HARD</button>
-                <button onclick="handleSrs(3)" class="bg-blue-700 p-4 rounded-lg text-xs font-bold">GOOD</button>
-                <button onclick="handleSrs(5)" class="bg-green-700 p-4 rounded-lg text-xs font-bold">EASY</button>
+                <button data-grade="1" class="bg-red-900 p-4 rounded-lg text-xs font-bold btn-srs">AGAIN</button>
+                <button data-grade="2" class="bg-orange-700 p-4 rounded-lg text-xs font-bold btn-srs">HARD</button>
+                <button data-grade="3" class="bg-blue-700 p-4 rounded-lg text-xs font-bold btn-srs">GOOD</button>
+                <button data-grade="4" class="bg-green-700 p-4 rounded-lg text-xs font-bold btn-srs">EASY</button>
             </div>
         </div>
     </div>
+<div id="reveal-area" class="hidden" style="text-align: center; margin-top: 20px;">
+    
+    <h2 id="song-info" style="color: #1DB954; font-size: 24px;">Song Title - Artist</h2>
+    
+    <p>How well did you know this one?</p>
 
+    <div class="rating-buttons" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+        <button onclick="rateSong(1)" style="background: #ff4444; color: white; padding: 15px; border: none; border-radius: 5px;">AGAIN (Hard)</button>
+        <button onclick="rateSong(3)" style="background: #ffbb33; color: white; padding: 15px; border: none; border-radius: 5px;">GOOD</button>
+        <button onclick="rateSong(5)" style="background: #00C851; color: white; padding: 15px; border: none; border-radius: 5px;">EASY</button>
+    </div>
+</div>
     <script src="script.js"></script>
 </body>
 </html>
