@@ -9,7 +9,7 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION (The "Code" Flow) ---
+// --- 1. AUTHENTICATION ---
 
 async function exchangeCodeForToken(code) {
     try {
@@ -31,7 +31,6 @@ async function exchangeCodeForToken(code) {
             accessToken = data.access_token;
             document.getElementById('auth-section').classList.add('hidden');
             document.getElementById('player-section').classList.remove('hidden');
-            // Clean the URL hash/params
             window.history.pushState({}, document.title, window.location.pathname);
             loadLibrary();
         }
@@ -63,7 +62,6 @@ async function loadLibrary() {
                 select.appendChild(opt);
             });
         }
-
         updateAnkiDisplay();
     } catch (e) { console.error("Library load failed", e); }
 }
@@ -73,9 +71,13 @@ function updateAnkiDisplay() {
     let counts = { new: 0, learning: 0, due: 0 };
 
     library.forEach(song => {
-        if (!song.next_review || song.next_review === 0) counts.new++;
-        else if (song.next_review <= now) counts.due++;
-        else counts.learning++;
+        if (!song.next_review || song.next_review === 0) {
+            counts.new++;
+        } else if (song.next_review <= now) {
+            counts.due++;
+        } else if (song.interval === 0) {
+            counts.learning++;
+        }
     });
 
     if(document.getElementById('count-new')) document.getElementById('count-new').innerText = counts.new;
@@ -104,14 +106,18 @@ async function playSong() {
     currentSong = getNextSong();
     if (!currentSong) return;
 
-    // Reset UI
+    // UI Updates
     document.getElementById('reveal-area').classList.add('hidden');
     if(document.getElementById('srs-controls')) document.getElementById('srs-controls').classList.add('hidden');
-    document.getElementById('visualizer').classList.remove('hidden');
-    document.getElementById('playing-status').innerText = "Playing...";
+    
+    document.getElementById('playing-status').innerText = "Playing";
+    const viz = document.getElementById('visualizer');
+    viz.classList.remove('hidden');
+    viz.classList.add('playing'); 
+    
     document.getElementById('main-action-btn').innerText = 'REVEAL';
 
-    // Transfer playback to this "Music Trivia" device
+    // Wake up the device
     await fetch('https://api.spotify.com/v1/me/player', {
         method: 'PUT',
         body: JSON.stringify({ device_ids: [deviceId], play: true }),
@@ -121,7 +127,6 @@ async function playSong() {
         }
     });
 
-    // Start the specific track
     try {
         await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
             method: 'PUT',
@@ -150,11 +155,12 @@ function reveal() {
     document.getElementById('song-year').innerText = `Year: ${currentSong.year}`;
     
     document.getElementById('reveal-area').classList.remove('hidden');
-    document.getElementById('visualizer').classList.add('hidden');
     document.getElementById('main-action-btn').classList.add('hidden');
     document.getElementById('srs-controls').classList.remove('hidden');
-    document.getElementById('playing-status').innerText = "Paused";
     
+    document.getElementById('playing-status').innerText = "Paused";
+    document.getElementById('visualizer').classList.remove('playing');
+
     if (player) player.pause();
 }
 
@@ -163,6 +169,7 @@ function handleSrs(grade) {
     const now = Date.now();
     const dayInMs = 24 * 60 * 60 * 1000;
 
+    // SRS Math
     if (gradeNum >= 3) {
         currentSong.interval = (currentSong.interval === 0) ? 1 : currentSong.interval * (gradeNum === 5 ? 4 : 2);
         currentSong.next_review = now + (currentSong.interval * dayInMs);
@@ -171,6 +178,7 @@ function handleSrs(grade) {
         currentSong.next_review = now + (10 * 60 * 1000); 
     }
 
+    // Save Progress
     const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
     progress[currentSong.uri] = {
         next_review: currentSong.next_review,
@@ -192,7 +200,6 @@ function handleSrs(grade) {
 
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    // FIXED: Ensure response_type is 'code'
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
     window.location.href = authUrl;
 };
@@ -222,9 +229,6 @@ window.onSpotifyWebPlaybackSDKReady = () => {
     player.connect();
 };
 
-// Check for 'code' in URL on load
 const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');
-if (code) {
-    exchangeCodeForToken(code);
-}
+if (code) exchangeCodeForToken(code);
