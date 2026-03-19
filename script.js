@@ -149,9 +149,24 @@ if (code) {
 
 window.onSpotifyWebPlaybackSDKReady = () => {
     player = new Spotify.Player({
-        name: 'Trivia Player',
-        getOAuthToken: cb => { cb(accessToken); }
+        name: 'Music Trivia Player',
+        getOAuthToken: cb => { cb(accessToken); },
+        volume: 1.0
     });
-    player.addListener('ready', ({ device_id }) => { deviceId = device_id; });
-    player.connect();
+
+    // --- THE "FORCE WAKE" FIX ---
+    player.addListener('ready', ({ device_id }) => {
+        deviceId = device_id;
+        console.log('Ready with Device ID', device_id);
+        
+        // This is the magic: The moment it's ready, we "touch" the player
+        // to tell Safari it's allowed to make noise later.
+        player.activateElement(); 
+    });
+
+    player.connect().then(success => {
+        if (success) {
+            console.log('The Web Playback SDK successfully connected to Spotify!');
+        }
+    });
 };
