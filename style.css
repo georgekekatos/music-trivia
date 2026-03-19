@@ -1,3 +1,7 @@
+body { background-color: #121212; color: white; touch-action: manipulation; }
+        .btn-srs { transition: transform 0.1s; }
+        .btn-srs:active { transform: scale(0.95); }
+
 /* The Anki Status Bar */
 #status-container {
     display: flex;
