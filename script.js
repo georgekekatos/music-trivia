@@ -62,41 +62,35 @@ async function loadLibrary() {
 async function playSong() {
     currentSong = getNextSong();
     
-    // 1. First, tell the internal player to "wake up"
+    // Ensure we are using the internal Player's ID
+    const url = `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`;
+
+    // 1. Tell the browser "Get ready to make noise"
     if (player) {
-        await player.activateElement(); // This is the magic key for Safari
-        await player.resume();
+        await player.activateElement(); 
     }
 
-    // 2. Now, send the specific song command to Spotify's servers
-    const url = deviceId 
-        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}` 
-        : `https://api.spotify.com/v1/me/player/play`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'PUT',
-            body: JSON.stringify({ 
-                uris: [currentSong.uri], 
-                position_ms: currentSong.start_ms 
-            }),
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${accessToken}` 
-            }
-        });
-
-        if (response.ok) {
-            document.getElementById('main-action-btn').innerText = 'REVEAL';
-            document.getElementById('playing-status').innerText = 'Playing...';
-            
-            // 3. Final kick: sometimes Safari needs one more 'resume' call
-            setTimeout(() => { player.resume(); }, 500);
-        } else {
-            alert("Device not active. Open Spotify app, play any song, then try again.");
+    // 2. Send the Play Command
+    const response = await fetch(url, {
+        method: 'PUT',
+        body: JSON.stringify({ 
+            uris: [currentSong.uri], // Must be "spotify:track:ID"
+            position_ms: currentSong.start_ms 
+        }),
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${accessToken}` 
         }
-    } catch (err) {
-        console.error(err);
+    });
+
+    if (response.ok) {
+        document.getElementById('main-action-btn').innerText = 'REVEAL';
+        // 3. Force the player to actually start the stream
+        setTimeout(() => { player.resume(); }, 1000);
+    } else {
+        const err = await response.json();
+        console.error("Playback failed:", err);
+        alert("Playback failed: " + err.error.message);
     }
 }
 
