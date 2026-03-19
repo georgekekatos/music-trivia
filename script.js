@@ -1,6 +1,7 @@
-// --- CONFIGURATION ---
+// --- 0. CONFIGURATION ---
 const CLIENT_ID = 'b26e1fefe8c046bba2b5e8ebdae73858';
 const CLIENT_SECRET = 'f1ce4e95f65045609866d6e566a575c6';
+// FORCE THE SLASH AT THE END
 const REDIRECT_URI = 'https://georgekekatos.github.io/music-trivia/'; 
 
 let accessToken = null;
@@ -9,7 +10,7 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION ---
+// --- 1. DEFINE FUNCTIONS FIRST ---
 
 async function exchangeCodeForToken(code) {
     try {
@@ -33,174 +34,99 @@ async function exchangeCodeForToken(code) {
             document.getElementById('player-section').classList.remove('hidden');
             window.history.pushState({}, document.title, window.location.pathname);
             loadLibrary();
+        } else {
+            alert("Spotify rejected the token swap: " + JSON.stringify(data));
         }
     } catch (err) {
-        console.error("Token Exchange Error:", err);
+        alert("Network Error: " + err);
     }
 }
-
-// --- 2. DATA & ANKI LOGIC ---
 
 async function loadLibrary() {
-    try {
-        const response = await fetch('master_library.json');
-        const rawData = await response.json();
-        const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
-        
-        library = rawData.map(song => ({
-            ...song,
-            ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
-        }));
-
-        const years = [...new Set(library.map(s => s.year))].sort();
-        const select = document.getElementById('year-filter');
-        if (select) {
-            select.innerHTML = '<option value="ALL">All Years (Due for Review)</option>';
-            years.forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y; opt.innerText = y;
-                select.appendChild(opt);
-            });
-        }
-        updateAnkiDisplay();
-    } catch (e) { console.error("Library load failed", e); }
-}
-
-function updateAnkiDisplay() {
-    const now = Date.now();
-    let counts = { new: 0, learning: 0, due: 0 };
-
-    library.forEach(song => {
-        if (!song.next_review || song.next_review === 0) {
-            counts.new++;
-        } else if (song.next_review <= now) {
-            counts.due++;
-        } else if (song.interval === 0) {
-            counts.learning++;
-        }
+    const response = await fetch('master_library.json');
+    const rawData = await response.json();
+    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
+    library = rawData.map(song => ({
+        ...song,
+        ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
+    }));
+    const years = [...new Set(library.map(s => s.year))].sort();
+    const select = document.getElementById('year-filter');
+    years.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y; opt.innerText = y;
+        select.appendChild(opt);
     });
-
-    if(document.getElementById('count-new')) document.getElementById('count-new').innerText = counts.new;
-    if(document.getElementById('count-learning')) document.getElementById('count-learning').innerText = counts.learning;
-    if(document.getElementById('count-due')) document.getElementById('count-due').innerText = counts.due;
 }
-
-function getNextSong() {
-    const filter = document.getElementById('year-filter').value;
-    const now = Date.now();
-    let pool = library.filter(s => (filter === 'ALL' || s.year == filter));
-    let duePool = pool.filter(s => s.next_review <= now || !s.next_review);
-    
-    if (duePool.length > 0) return duePool[Math.floor(Math.random() * duePool.length)];
-    return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// --- 3. PLAYBACK ENGINE ---
 
 async function playSong() {
-    if (!deviceId || !accessToken) {
-        alert("Spotify not connected. Please login again.");
-        return;
+    if (!currentSong) {
+        currentSong = getNextSong();
     }
-
-    currentSong = getNextSong();
-    if (!currentSong) return;
-
-    // UI Updates
-    document.getElementById('reveal-area').classList.add('hidden');
-    if(document.getElementById('srs-controls')) document.getElementById('srs-controls').classList.add('hidden');
     
-    document.getElementById('playing-status').innerText = "Playing";
-    const viz = document.getElementById('visualizer');
-    viz.classList.remove('hidden');
-    viz.classList.add('playing'); 
-    
-    document.getElementById('main-action-btn').innerText = 'REVEAL';
-
-    // Wake up the device
-    await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        body: JSON.stringify({ device_ids: [deviceId], play: true }),
-        headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${accessToken}` 
-        }
-    });
+    // We try to use the deviceId if the Web Player is ready, 
+    // otherwise, we send it to 'play' on your most recent active device.
+    const url = deviceId 
+        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}` 
+        : `https://accounts.spotify.com/authorize1`;
 
     try {
-        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        const response = await fetch(url, {
             method: 'PUT',
             body: JSON.stringify({ 
-                uris: [currentSong.uri],
-                position_ms: currentSong.start_ms || 0 
+                uris: [currentSong.uri], 
+                position_ms: currentSong.start_ms 
             }),
             headers: { 
                 'Content-Type': 'application/json', 
                 'Authorization': `Bearer ${accessToken}` 
             }
         });
-        
-        if (player) {
-            await player.activateElement();
-            setTimeout(() => { player.resume(); }, 500);
+
+        if (response.ok) {
+            document.getElementById('main-action-btn').innerText = 'REVEAL';
+            document.getElementById('playing-status').innerText = 'Playing...';
+        } else {
+            const errorData = await response.json();
+            console.error("Playback Error:", errorData);
+            // If it's a 404, it means no active device was found
+            if (response.status === 404) {
+                alert("No active Spotify device found. Open the Spotify app and play a song first!");
+            }
         }
     } catch (err) {
-        console.error("Playback Error:", err);
+        console.error("Fetch error:", err);
     }
+}
+
+function getNextSong() {
+    const filter = document.getElementById('year-filter').value;
+    let pool = (filter === 'ALL') ? library : library.filter(s => s.year == filter);
+    return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function reveal() {
     document.getElementById('song-title').innerText = currentSong.title;
     document.getElementById('song-artist').innerText = currentSong.artist;
-    document.getElementById('song-year').innerText = `Year: ${currentSong.year}`;
-    
     document.getElementById('reveal-area').classList.remove('hidden');
     document.getElementById('main-action-btn').classList.add('hidden');
     document.getElementById('srs-controls').classList.remove('hidden');
-    
-    document.getElementById('playing-status').innerText = "Paused";
-    document.getElementById('visualizer').classList.remove('playing');
-
-    if (player) player.pause();
 }
 
 function handleSrs(grade) {
-    const gradeNum = parseInt(grade);
-    const now = Date.now();
-    const dayInMs = 24 * 60 * 60 * 1000;
-
-    // SRS Math
-    if (gradeNum >= 3) {
-        currentSong.interval = (currentSong.interval === 0) ? 1 : currentSong.interval * (gradeNum === 5 ? 4 : 2);
-        currentSong.next_review = now + (currentSong.interval * dayInMs);
-    } else {
-        currentSong.interval = 0;
-        currentSong.next_review = now + (10 * 60 * 1000); 
-    }
-
-    // Save Progress
-    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
-    progress[currentSong.uri] = {
-        next_review: currentSong.next_review,
-        interval: currentSong.interval,
-        ease: 2.5
-    };
-    localStorage.setItem('trivia_progress', JSON.stringify(progress));
-
-    const idx = library.findIndex(s => s.uri === currentSong.uri);
-    if (idx !== -1) library[idx] = {...currentSong};
-
-    updateAnkiDisplay();
+    // Basic reset for now to ensure flow works
+    document.getElementById('reveal-area').classList.add('hidden');
     document.getElementById('srs-controls').classList.add('hidden');
     document.getElementById('main-action-btn').classList.remove('hidden');
-    document.getElementById('main-action-btn').innerText = 'PLAY';
+    document.getElementById('main-action-btn').innerText = 'NEXT SONG';
+    if (player) player.pause();
 }
 
-// --- 4. INITIALIZATION ---
+// --- 2. EXECUTION AT THE BOTTOM ---
 
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}&show_dialog=true`;
     window.location.href = authUrl;
 };
 
@@ -211,8 +137,15 @@ document.getElementById('main-action-btn').onclick = () => {
 };
 
 document.querySelectorAll('.btn-srs').forEach(btn => {
-    btn.onclick = () => handleSrs(btn.getAttribute('data-grade'));
+    btn.onclick = () => handleSrs(btn.dataset.grade);
 });
+
+// Check if we just arrived from Spotify
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+if (code) {
+    exchangeCodeForToken(code);
+}
 
 window.onSpotifyWebPlaybackSDKReady = () => {
     player = new Spotify.Player({
@@ -221,14 +154,19 @@ window.onSpotifyWebPlaybackSDKReady = () => {
         volume: 1.0
     });
 
+    // --- THE "FORCE WAKE" FIX ---
     player.addListener('ready', ({ device_id }) => {
         deviceId = device_id;
-        console.log('Spotify Player Ready');
+        console.log('Ready with Device ID', device_id);
+        
+        // This is the magic: The moment it's ready, we "touch" the player
+        // to tell Safari it's allowed to make noise later.
+        player.activateElement(); 
     });
 
-    player.connect();
+    player.connect().then(success => {
+        if (success) {
+            console.log('The Web Playback SDK successfully connected to Spotify!');
+        }
+    });
 };
-
-const urlParams = new URLSearchParams(window.location.search);
-const code = urlParams.get('code');
-if (code) exchangeCodeForToken(code);
