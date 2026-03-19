@@ -60,15 +60,18 @@ async function loadLibrary() {
 }
 
 async function playSong() {
-    if (!currentSong) {
-        currentSong = getNextSong();
-    }
+    currentSong = getNextSong();
     
-    // We try to use the deviceId if the Web Player is ready, 
-    // otherwise, we send it to 'play' on your most recent active device.
+    // 1. First, tell the internal player to "wake up"
+    if (player) {
+        await player.activateElement(); // This is the magic key for Safari
+        await player.resume();
+    }
+
+    // 2. Now, send the specific song command to Spotify's servers
     const url = deviceId 
         ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}` 
-        : `https://accounts.spotify.com/authorize1`;
+        : `https://api.spotify.com/v1/me/player/play`;
 
     try {
         const response = await fetch(url, {
@@ -86,16 +89,14 @@ async function playSong() {
         if (response.ok) {
             document.getElementById('main-action-btn').innerText = 'REVEAL';
             document.getElementById('playing-status').innerText = 'Playing...';
+            
+            // 3. Final kick: sometimes Safari needs one more 'resume' call
+            setTimeout(() => { player.resume(); }, 500);
         } else {
-            const errorData = await response.json();
-            console.error("Playback Error:", errorData);
-            // If it's a 404, it means no active device was found
-            if (response.status === 404) {
-                alert("No active Spotify device found. Open the Spotify app and play a song first!");
-            }
+            alert("Device not active. Open Spotify app, play any song, then try again.");
         }
     } catch (err) {
-        console.error("Fetch error:", err);
+        console.error(err);
     }
 }
 
