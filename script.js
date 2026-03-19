@@ -1,5 +1,5 @@
+// --- CONFIGURATION ---
 const CLIENT_ID = 'b26e1fefe8c046bba2b5e8ebdae73858';
-const CLIENT_SECRET = 'f1ce4e95f65045609866d6e566a575c6';
 const REDIRECT_URI = 'https://georgekekatos.github.io/music-trivia/'; 
 
 let accessToken = null;
@@ -8,156 +8,36 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTH & DATA ---
+// --- CORE FUNCTIONS ---
 
 async function exchangeCodeForToken(code) {
-    try {
-        const response = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + btoa(CLIENT_ID + ':' + CLIENT_SECRET)
-            },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                code: code,
-                redirect_uri: REDIRECT_URI
-            })
-        });
-
-        const data = await response.json();
-        if (data.access_token) {
-            accessToken = data.access_token;
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('player-section').classList.remove('hidden');
-            window.history.pushState({}, document.title, window.location.pathname);
-            loadLibrary();
-        }
-    } catch (err) { alert("Auth Error: " + err); }
+    // Note: In a real app, this should happen on a backend server. 
+    // Since you are on GitHub Pages, we are assuming your setup handles the token exchange.
+    // Ensure your Auth flow is returning the token to the 'accessToken' variable.
 }
 
 async function loadLibrary() {
-    const response = await fetch('master_library.json');
-    const rawData = await response.json();
-    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
-    
-    library = rawData.map(song => ({
-        ...song,
-        ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
-    }));
+    try {
+        const response = await fetch('master_library.json');
+        const rawData = await response.json();
+        const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
+        
+        library = rawData.map(song => ({
+            ...song,
+            ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
+        }));
 
-    const years = [...new Set(library.map(s => s.year))].sort();
-    const select = document.getElementById('year-filter');
-    years.forEach(y => {
-        const opt = document.createElement('option');
-        opt.value = y; opt.innerText = y;
-        select.appendChild(opt);
-    });
-    updateAnkiDisplay();
-}
+        const years = [...new Set(library.map(s => s.year))].sort();
+        const select = document.getElementById('year-filter');
+        select.innerHTML = '<option value="ALL">All Years (Due for Review)</option>';
+        years.forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = y; opt.innerText = y;
+            select.appendChild(opt);
+        });
 
-// --- 2. THE PLAYBACK (YOUR ORIGINAL LOGIC) ---
-
-async function playSong() {
-    currentSong = getNextSong();
-    if (!currentSong) return;
-
-    // Reset UI
-    document.getElementById('reveal-area').classList.add('hidden');
-    document.getElementById('srs-controls').classList.add('hidden');
-    document.getElementById('main-action-btn').classList.remove('hidden');
-    
-    const url = `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`;
-
-    // Fix for Mobile/Safari
-    if (player) {
-        await player.activateElement(); 
-    }
-
-    const response = await fetch(url, {
-        method: 'PUT',
-        body: JSON.stringify({ 
-            uris: [currentSong.uri],
-            position_ms: currentSong.start_ms || 0
-        }),
-        headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${accessToken}` 
-        }
-    });
-
-    if (response.ok) {
-        document.getElementById('main-action-btn').innerText = 'REVEAL';
-        document.getElementById('playing-status').innerText = "Playing...";
-        document.getElementById('visualizer').classList.remove('hidden');
-        // Your specific 1s delay fix
-        setTimeout(() => { player.resume(); }, 1000);
-    } else {
-        const err = await response.json();
-        alert("Playback failed: " + err.error.message);
-    }
-}
-
-function getNextSong() {
-    const filter = document.getElementById('year-filter').value;
-    const now = Date.now();
-    let pool = (filter === 'ALL') ? library : library.filter(s => s.year == filter);
-    
-    // Prioritize Due/New
-    let due = pool.filter(s => !s.next_review || s.next_review <= now);
-    if (due.length > 0) return due[Math.floor(Math.random() * due.length)];
-    return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// --- 3. THE REVEAL & SRS (THE FIX) ---
-
-function reveal() {
-    document.getElementById('song-title').innerText = currentSong.title;
-    document.getElementById('song-artist').innerText = currentSong.artist;
-    document.getElementById('song-year').innerText = "Year: " + currentSong.year;
-    
-    document.getElementById('reveal-area').classList.remove('hidden');
-    document.getElementById('main-action-btn').classList.add('hidden');
-    document.getElementById('srs-controls').classList.remove('hidden');
-    document.getElementById('visualizer').classList.add('hidden');
-}
-
-function handleSrs(grade) {
-    const now = Date.now();
-    const dayInMs = 24 * 60 * 60 * 1000;
-
-    // 1. Calculate next review
-    if (grade >= 3) {
-        currentSong.interval = (currentSong.interval || 0) === 0 ? 1 : currentSong.interval * 2;
-        currentSong.next_review = now + (currentSong.interval * dayInMs);
-    } else {
-        currentSong.interval = 0;
-        currentSong.next_review = now + (10 * 60 * 1000); // 10 mins
-    }
-
-    // 2. Update library object
-    const index = library.findIndex(s => s.uri === currentSong.uri);
-    if (index !== -1) library[index] = {...currentSong};
-
-    // 3. Save to LocalStorage
-    const progress = {};
-    library.forEach(s => {
-        if (s.next_review > 0) {
-            progress[s.uri] = { next_review: s.next_review, interval: s.interval };
-        }
-    });
-    localStorage.setItem('trivia_progress', JSON.stringify(progress));
-
-    // 4. Update the "0 + 0 + 154" display
-    updateAnkiDisplay();
-
-    // 5. Reset UI for next round
-    document.getElementById('reveal-area').classList.add('hidden');
-    document.getElementById('srs-controls').classList.add('hidden');
-    document.getElementById('main-action-btn').classList.remove('hidden');
-    document.getElementById('main-action-btn').innerText = 'NEXT SONG';
-    if (player) player.pause();
-    window.scrollTo(0, 0);
+        updateAnkiDisplay();
+    } catch (e) { console.error("Library load failed", e); }
 }
 
 function updateAnkiDisplay() {
@@ -175,12 +55,130 @@ function updateAnkiDisplay() {
     document.getElementById('count-due').innerText = counts.due;
 }
 
-// --- 4. SDK INITIALIZATION ---
+function getNextSong() {
+    const filter = document.getElementById('year-filter').value;
+    const now = Date.now();
+    let pool = library.filter(s => (filter === 'ALL' || s.year == filter));
+    let duePool = pool.filter(s => s.next_review <= now);
+    
+    if (duePool.length > 0) return duePool[Math.floor(Math.random() * duePool.length)];
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+async function playSong() {
+    if (!deviceId) {
+        alert("Spotify Player not ready. Try playing a song in the Spotify App first to 'wake' it up.");
+        return;
+    }
+
+    currentSong = getNextSong();
+    if (!currentSong) return;
+
+    // 1. UI Updates
+    document.getElementById('reveal-area').classList.add('hidden');
+    document.getElementById('srs-controls').classList.add('hidden');
+    document.getElementById('visualizer').classList.remove('hidden');
+    document.getElementById('playing-status').innerText = "Playing...";
+    document.getElementById('main-action-btn').innerText = 'REVEAL';
+
+    // 2. THE MOBILE FIX: Force Spotify to transfer playback to this device
+    await fetch('https://api.spotify.com/v1/me/player', {
+        method: 'PUT',
+        body: JSON.stringify({ device_ids: [deviceId], play: true }),
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${accessToken}` 
+        }
+    });
+
+    // 3. Play the specific song
+    const url = `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`;
+    try {
+        await fetch(url, {
+            method: 'PUT',
+            body: JSON.stringify({ 
+                uris: [currentSong.uri],
+                position_ms: currentSong.start_ms || 0 
+            }),
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${accessToken}` 
+            }
+        });
+        
+        // Final kick to un-mute Safari
+        if (player) {
+            await player.activateElement();
+            setTimeout(() => { player.resume(); }, 500);
+        }
+    } catch (err) {
+        console.error("Playback Fetch Error:", err);
+    }
+}
+
+function reveal() {
+    document.getElementById('song-title').innerText = currentSong.title;
+    document.getElementById('song-artist').innerText = currentSong.artist;
+    document.getElementById('song-year').innerText = `Year: ${currentSong.year}`;
+    
+    document.getElementById('reveal-area').classList.remove('hidden');
+    document.getElementById('visualizer').classList.add('hidden');
+    document.getElementById('main-action-btn').classList.add('hidden');
+    document.getElementById('srs-controls').classList.remove('hidden');
+    document.getElementById('playing-status').innerText = "Paused";
+    
+    if (player) player.pause();
+}
+
+function handleSrs(grade) {
+    const gradeNum = parseInt(grade);
+    const now = Date.now();
+    const dayInMs = 24 * 60 * 60 * 1000;
+
+    // Simple SRS Logic: 1=Again, 2=Hard, 3=Good, 4=Easy
+    if (gradeNum >= 3) {
+        currentSong.interval = (currentSong.interval === 0) ? 1 : currentSong.interval * (gradeNum === 4 ? 4 : 2);
+        currentSong.next_review = now + (currentSong.interval * dayInMs);
+    } else {
+        currentSong.interval = 0;
+        currentSong.next_review = now + (10 * 60 * 1000); // 10 mins
+    }
+
+    const index = library.findIndex(s => s.uri === currentSong.uri);
+    if (index !== -1) library[index] = { ...currentSong };
+
+    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
+    progress[currentSong.uri] = {
+        next_review: currentSong.next_review,
+        interval: currentSong.interval,
+        ease: 2.5
+    };
+    localStorage.setItem('trivia_progress', JSON.stringify(progress));
+
+    updateAnkiDisplay();
+    document.getElementById('srs-controls').classList.add('hidden');
+    document.getElementById('main-action-btn').classList.remove('hidden');
+    document.getElementById('main-action-btn').innerText = 'PLAY';
+}
+
+// --- INITIALIZATION ---
 
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}&show_dialog=true`;
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+    window.location.href = authUrl;
 };
+
+// Handle the Implicit Grant Token (Simpler for GitHub Pages)
+if (window.location.hash) {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    accessToken = params.get('access_token');
+    if (accessToken) {
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('player-section').classList.remove('hidden');
+        loadLibrary();
+    }
+}
 
 document.getElementById('main-action-btn').onclick = () => {
     const text = document.getElementById('main-action-btn').innerText;
@@ -188,20 +186,22 @@ document.getElementById('main-action-btn').onclick = () => {
     else reveal();
 };
 
+document.querySelectorAll('.btn-srs').forEach(btn => {
+    btn.onclick = () => handleSrs(btn.dataset.grade);
+});
+
 window.onSpotifyWebPlaybackSDKReady = () => {
     player = new Spotify.Player({
-        name: 'Music Trivia',
+        name: 'Music Trivia Player',
         getOAuthToken: cb => { cb(accessToken); },
         volume: 1.0
     });
 
     player.addListener('ready', ({ device_id }) => {
         deviceId = device_id;
-        player.activateElement(); 
+        console.log('Spotify Player Ready');
+        player.activateElement(); // Crucial for Safari
     });
 
     player.connect();
 };
-
-const code = new URLSearchParams(window.location.search).get('code');
-if (code) exchangeCodeForToken(code);
