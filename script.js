@@ -1,6 +1,6 @@
 // --- 0. CONFIGURATION ---
 const CLIENT_ID = 'b26e1fefe8c046bba2b5e8ebdae73858';
-const CLIENT_SECRET = '12bd69f385f5481984f9c6b187e0af7a';
+const CLIENT_SECRET = 'f1ce4e95f65045609866d6e566a575c6';
 const REDIRECT_URI = 'https://georgekekatos.github.io/music-trivia/'; 
 
 let accessToken = null;
