@@ -242,3 +242,38 @@ function rateSong(grade) {
     // Scroll back to top for the next round
     window.scrollTo(0, 0);
 }
+
+function revealAnswer() {
+    // 1. Make sure we actually have a song playing
+    if (!currentSong) return;
+
+    // 2. Fill the h2 tag with the song's name and artist
+    const info = document.getElementById('song-info');
+    info.innerText = `${currentSong.title} - ${currentSong.artist}`;
+
+    // 3. Show the hidden area where the buttons are
+    const revealArea = document.getElementById('reveal-area');
+    revealArea.classList.remove('hidden');
+
+    // 4. Change the main button text so it's ready for the next song later
+    document.getElementById('main-action-btn').innerText = 'NEXT SONG';
+    
+    // 5. Hide the music visualizer animation
+    const viz = document.getElementById('visualizer');
+    if (viz) viz.style.display = 'none';
+}
+
+function handleMainClick() {
+    const btn = document.getElementById('main-action-btn');
+
+    if (btn.innerText === 'PLAY') {
+        playSong(); // Start the music
+    } else if (btn.innerText === 'REVEAL') {
+        revealAnswer(); // Show the answer & rating buttons
+    } else if (btn.innerText === 'NEXT SONG') {
+        // Reset the UI and play the next one
+        document.getElementById('reveal-area').classList.add('hidden');
+        btn.innerText = 'PLAY';
+        playSong();
+    }
+}
