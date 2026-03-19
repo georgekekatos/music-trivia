@@ -57,6 +57,7 @@ async function loadLibrary() {
         opt.value = y; opt.innerText = y;
         select.appendChild(opt);
     });
+    updateAnkiDisplay();
 }
 
 async function playSong() {
