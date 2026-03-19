@@ -6,11 +6,11 @@ let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION (REAL LIVE URL) ---
+// --- 1. AUTHENTICATION (FIXED) ---
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
     
-    // This is the actual Spotify Authorization endpoint
+    // THE REAL SPOTIFY URL:
     const authUrl = new URL("https://accounts.spotify.com/authorize");
     
     const params = {
@@ -57,15 +57,12 @@ window.onSpotifyWebPlaybackSDKReady = () => {
 async function loadLibrary() {
     const response = await fetch('master_library.json');
     const rawData = await response.json();
-    
-    // Merge with LocalStorage progress
     const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
     library = rawData.map(song => ({
         ...song,
         ...(progress[song.uri] || { next_review: 0, interval: 0, ease: 2.5 })
     }));
 
-    // Populate Year Filter
     const years = [...new Set(library.map(s => s.year))].sort();
     const select = document.getElementById('year-filter');
     years.forEach(y => {
@@ -78,14 +75,12 @@ async function loadLibrary() {
 function getNextSong() {
     const filter = document.getElementById('year-filter').value;
     const now = Date.now();
-    
     let pool = library;
     if (filter !== 'ALL') {
         pool = library.filter(s => s.year == filter);
     } else {
         pool = library.filter(s => s.next_review <= now);
     }
-
     if (pool.length === 0) return library[Math.floor(Math.random() * library.length)];
     return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -93,6 +88,7 @@ function getNextSong() {
 async function playSong() {
     currentSong = getNextSong();
     
+    // THE REAL PLAYBACK URL:
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         body: JSON.stringify({ uris: [currentSong.uri], position_ms: currentSong.start_ms }),
@@ -107,37 +103,29 @@ function reveal() {
     document.getElementById('song-title').innerText = currentSong.title;
     document.getElementById('song-artist').innerText = currentSong.artist;
     document.getElementById('song-year').innerText = currentSong.year;
-    
     document.getElementById('reveal-area').classList.remove('hidden');
     document.getElementById('main-action-btn').classList.add('hidden');
     document.getElementById('srs-controls').classList.remove('hidden');
 }
 
-// --- 4. SRS MATHS (The Anki Bit) ---
 function handleSrs(grade) {
     const now = Date.now();
     let { interval, ease } = currentSong;
-
-    if (grade >= 3) { // Correct
+    if (grade >= 3) {
         if (interval === 0) interval = 1;
         else if (interval === 1) interval = 4;
         else interval = Math.round(interval * ease);
         ease = ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
-    } else { // Wrong
+    } else {
         interval = 1;
         ease = Math.max(1.3, ease - 0.2);
     }
-
     currentSong.next_review = now + (interval * 24 * 60 * 60 * 1000);
     currentSong.interval = interval;
     currentSong.ease = ease;
-
-    // Save progress
     const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
     progress[currentSong.uri] = { next_review: currentSong.next_review, interval, ease };
     localStorage.setItem('trivia_progress', JSON.stringify(progress));
-
-    // Reset UI for next song
     resetUI();
 }
 
