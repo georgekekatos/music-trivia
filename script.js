@@ -190,21 +190,37 @@ function updateAnkiDisplay() {
     document.getElementById('count-due').innerText = counts.due;
 }
 
-async function rateSong(grade) {
-    // ... (Your math for calculating the new next_review) ...
+function rateSong(grade) {
+    if (!currentSong) return;
 
-    // Save to local storage so you don't lose progress if the phone dies
+    const now = Date.now();
+    const dayInMs = 24 * 60 * 60 * 1000;
+
+    // Simplified Anki-style logic
+    if (grade >= 3) {
+        // Correct guess: Push it into the future
+        // If it's the first time, set interval to 1 day
+        currentSong.interval = currentSong.interval === 0 ? 1 : currentSong.interval * 2;
+        currentSong.next_review = now + (currentSong.interval * dayInMs);
+    } else {
+        // Wrong guess: Reset it to "Soon" (10 minutes from now)
+        currentSong.interval = 0;
+        currentSong.next_review = now + (10 * 60 * 1000); 
+    }
+
+    // --- CRITICAL: SAVE TO LOCAL STORAGE ---
     const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
     progress[currentSong.uri] = {
         next_review: currentSong.next_review,
         interval: currentSong.interval,
-        ease: currentSong.ease
+        ease: currentSong.ease || 2.5
     };
     localStorage.setItem('trivia_progress', JSON.stringify(progress));
 
     // --- REFRESH THE NUMBERS ---
-    updateAnkiDisplay(); 
+    updateAnkiDisplay();
 
-    // Go back to the start screen for the next song
-    showStartScreen(); 
+    // Reset UI for next round
+    document.getElementById('reveal-area').classList.add('hidden');
+    document.getElementById('main-action-btn').innerText = 'PLAY';
 }
