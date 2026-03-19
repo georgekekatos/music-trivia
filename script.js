@@ -191,36 +191,54 @@ function updateAnkiDisplay() {
 }
 
 function rateSong(grade) {
-    if (!currentSong) return;
+    console.log("Rating received:", grade);
+    if (!currentSong) {
+        console.error("No song is currently active!");
+        return;
+    }
 
     const now = Date.now();
     const dayInMs = 24 * 60 * 60 * 1000;
 
-    // Simplified Anki-style logic
+    // 1. Calculate the New Review Date
     if (grade >= 3) {
-        // Correct guess: Push it into the future
-        // If it's the first time, set interval to 1 day
-        currentSong.interval = currentSong.interval === 0 ? 1 : currentSong.interval * 2;
+        // If it's a "Pass" (Easy/Good), move it to tomorrow or further
+        currentSong.interval = (currentSong.interval || 0) === 0 ? 1 : currentSong.interval * 2;
         currentSong.next_review = now + (currentSong.interval * dayInMs);
     } else {
-        // Wrong guess: Reset it to "Soon" (10 minutes from now)
+        // If it's a "Fail" (Hard), show it again in 10 minutes
         currentSong.interval = 0;
         currentSong.next_review = now + (10 * 60 * 1000); 
     }
 
-    // --- CRITICAL: SAVE TO LOCAL STORAGE ---
-    const progress = JSON.parse(localStorage.getItem('trivia_progress') || '{}');
-    progress[currentSong.uri] = {
-        next_review: currentSong.next_review,
-        interval: currentSong.interval,
-        ease: currentSong.ease || 2.5
-    };
+    // 2. Save this specific song's progress to the Library object
+    // Find the song in the main library and update it
+    const index = library.findIndex(s => s.uri === currentSong.uri);
+    if (index !== -1) {
+        library[index].next_review = currentSong.next_review;
+        library[index].interval = currentSong.interval;
+    }
+
+    // 3. Save everything to the phone's permanent memory
+    const progress = {};
+    library.forEach(s => {
+        if (s.next_review > 0) {
+            progress[s.uri] = {
+                next_review: s.next_review,
+                interval: s.interval,
+                ease: s.ease || 2.5
+            };
+        }
+    });
     localStorage.setItem('trivia_progress', JSON.stringify(progress));
 
-    // --- REFRESH THE NUMBERS ---
+    // 4. Update the 0 + 0 + 0 display
     updateAnkiDisplay();
 
-    // Reset UI for next round
+    // 5. Reset UI
     document.getElementById('reveal-area').classList.add('hidden');
     document.getElementById('main-action-btn').innerText = 'PLAY';
+    
+    // Scroll back to top for the next round
+    window.scrollTo(0, 0);
 }
