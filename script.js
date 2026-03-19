@@ -163,3 +163,29 @@ window.onSpotifyWebPlaybackSDKReady = () => {
 
     player.connect();
 };
+
+JavaScript
+function updateAnkiDisplay() {
+    const now = Date.now();
+    let counts = { new: 0, learning: 0, due: 0 };
+
+    library.forEach(song => {
+        // New: Never been reviewed
+        if (!song.next_review || song.next_review === 0) {
+            counts.new++;
+        } 
+        // Due: Review time has passed
+        else if (song.next_review <= now) {
+            counts.due++;
+        } 
+        // Learning: Reviewed but not due yet
+        else {
+            counts.learning++;
+        }
+    });
+
+    // Update the HTML spans we created earlier
+    document.getElementById('count-new').innerText = counts.new;
+    document.getElementById('count-learning').innerText = counts.learning;
+    document.getElementById('count-due').innerText = counts.due;
+}
