@@ -1,20 +1,27 @@
 const CLIENT_ID = 'b26e1fefe8c046bba2b5e8ebdae73858';
-const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0]; 
+const REDIRECT_URI = window.location.origin + window.location.pathname;
 let accessToken = null;
 let player = null;
 let deviceId = null;
 let currentSong = null;
 let library = [];
 
-// --- 1. AUTHENTICATION (FIXED) ---
+// --- 1. AUTHENTICATION (AUTHORIZATION CODE FLOW) ---
+
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+
+if (code) {
+    // If we have a code in the URL, exchange it for a token
+    exchangeCodeForToken(code);
+}
+
 document.getElementById('login-btn').onclick = () => {
     const scope = 'streaming user-read-email user-read-private user-modify-playback-state';
-    
-    // THE REAL SPOTIFY URL:
     const authUrl = new URL("https://accounts.spotify.com/authorize");
     
     const params = {
-        response_type: 'token', 
+        response_type: 'code', // CHANGED FROM 'token' TO 'code'
         client_id: CLIENT_ID,
         scope: scope,
         redirect_uri: REDIRECT_URI,
@@ -25,17 +32,33 @@ document.getElementById('login-btn').onclick = () => {
     window.location.href = authUrl.toString();
 };
 
-const hash = window.location.hash.substring(1).split('&').reduce((initial, item) => {
-    if (item) { var parts = item.split('='); initial[parts[0]] = decodeURIComponent(parts[1]); }
-    return initial;
-}, {});
+async function exchangeCodeForToken(code) {
+    // Note: In a professional app, this happens on a server. 
+    // For your personal trivia tool, we'll do it here, but you'll need your Client Secret.
+    const clientSecret = '12bd69f385f5481984f9c6b187e0af7a'; 
+    
+    const response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Basic ' + btoa(CLIENT_ID + ':' + clientSecret)
+        },
+        body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: REDIRECT_URI
+        })
+    });
 
-if (hash.access_token) {
-    accessToken = hash.access_token;
-    document.getElementById('auth-section').classList.add('hidden');
-    document.getElementById('player-section').classList.remove('hidden');
-    window.location.hash = '';
-    loadLibrary();
+    const data = await response.json();
+    if (data.access_token) {
+        accessToken = data.access_token;
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('player-section').classList.remove('hidden');
+        // Clean the URL
+        window.history.pushState({}, document.title, window.location.pathname);
+        loadLibrary();
+    }
 }
 
 // --- 2. SPOTIFY PLAYER SETUP ---
